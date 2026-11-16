@@ -60,8 +60,8 @@ A single dashboard (`/`) provides:
 1. Clone the repository and install dependencies:
 
    ```bash
-   git clone git@github.com:akelani-circle/arc-usdc-loans.git
-   cd arc-usdc-loans
+   git clone git@github.com:circlefin/arc-usdc-borrowing.git
+   cd arc-usdc-borrowing
    npm install
    ```
 
