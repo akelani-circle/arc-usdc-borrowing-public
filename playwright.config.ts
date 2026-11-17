@@ -18,7 +18,8 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = 3100;
+// The suite starts its own dev server here. Set E2E_PORT if 3100 is taken.
+const PORT = Number(process.env.E2E_PORT) || 3100;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -33,7 +34,9 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `PORT=${PORT} npm run dev`,
+    command: "npm run dev",
+    // Wins over a PORT in .env.local (see scripts/next.mjs).
+    env: { PORT: String(PORT) },
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

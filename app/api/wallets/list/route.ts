@@ -17,9 +17,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { serializeError, ucwClient } from "@/lib/borrowKit";
+import { ucwClient } from "@/lib/borrowKit";
 import { limits } from "@/lib/limits";
-import { readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
+import { errorResponse, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
 import { logRouteError } from "@/lib/routeLog";
 import { findSessionByToken } from "@/lib/session";
 
@@ -44,6 +44,6 @@ export async function POST(req: Request) {
     return NextResponse.json(data);
   } catch (error) {
     logRouteError("wallets/list", error);
-    return NextResponse.json(serializeError(error), { status: 500 });
+    return errorResponse(error);
   }
 }

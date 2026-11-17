@@ -19,6 +19,7 @@
 import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 
+import { errorStatus, serializeError } from "@/lib/kitErrorTypes";
 import type { RateLimitResult } from "@/lib/rateLimit";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -71,4 +72,9 @@ export function tooManyRequests(result: Extract<RateLimitResult, { ok: false }>)
 
 export function badRequest(message: string) {
   return NextResponse.json({ message }, { status: 400 });
+}
+
+/** A failed Borrow Kit or Circle call, with a status that says what went wrong instead of 500. */
+export function errorResponse(error: unknown) {
+  return NextResponse.json(serializeError(error), { status: errorStatus(error) });
 }

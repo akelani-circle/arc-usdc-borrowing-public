@@ -31,12 +31,12 @@ describe("parseKitError", () => {
         type: "INPUT",
         recoverability: "FATAL",
       },
-      500,
+      422,
     );
 
     const parsed = parseKitError(err);
     expect(parsed.title).toBe(
-      "Your wallet doesn't hold enough of the loan asset to cover this repayment — add more USDC (or partially repay first) before closing.",
+      "The Borrow Service couldn't process this. Check your wallet holds enough USDC and cirBTC for it.",
     );
     // The SDK's own sentence is kept as detail, minus its internal call-site prefix.
     expect(parsed.detail).toBe(
@@ -57,6 +57,26 @@ describe("parseKitError", () => {
       500,
     );
     expect(parseKitError(err).retryable).toBe(true);
+  });
+
+  // An unapproved challenge isn't revoked when the adapter stops waiting: "start again" could
+  // send the transaction twice.
+  it("warns that a timed-out PIN approval can still go through", () => {
+    const err = new ApiError(
+      {
+        message:
+          "Network timeout on circle-ucw: The challenge was not revoked: if the owner approves it later, the transaction may still execute on-chain. Surface this to the user before retrying.",
+        code: 3002,
+        type: "NETWORK",
+        recoverability: "RETRYABLE",
+      },
+      504,
+    );
+    const parsed = parseKitError(err);
+    expect(parsed.title).toBe(
+      "The PIN approval timed out. It wasn't cancelled, so refresh to check your loan before trying again.",
+    );
+    expect(parsed.retryable).toBe(false);
   });
 
   it("never puts a revert blob in front of the user", () => {

@@ -18,10 +18,11 @@
 
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
-import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
-  plugins: [tsconfigPaths(), react()],
+  plugins: [react()],
+  // Resolves the "@/*" alias from tsconfig.json (Vite 8 does this natively).
+  resolve: { tsconfigPaths: true },
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],

@@ -17,10 +17,10 @@
  */
 
 import { NextResponse } from "next/server";
-import { borrowKit, CHAIN, Blockchain, getChainByEnum, serializeError } from "@/lib/borrowKit";
+import { borrowKit, CHAIN, Blockchain, getChainByEnum } from "@/lib/borrowKit";
 import { createAdapter } from "@/lib/adapter";
 import { limits } from "@/lib/limits";
-import { readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
+import { errorResponse, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
 import { logRouteError } from "@/lib/routeLog";
 import { requireLiveSession } from "@/lib/session";
 
@@ -43,6 +43,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ walletAddress, ...result });
   } catch (error) {
     logRouteError("loans", error);
-    return NextResponse.json(serializeError(error), { status: 500 });
+    return errorResponse(error);
   }
 }

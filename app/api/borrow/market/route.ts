@@ -17,9 +17,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { borrowKit, CHAIN, DEFAULT_MARKET_ID, serializeError } from "@/lib/borrowKit";
+import { borrowKit, CHAIN, DEFAULT_MARKET_ID } from "@/lib/borrowKit";
 import { limits } from "@/lib/limits";
-import { badRequest, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
+import { badRequest, errorResponse, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
 import { logRouteError } from "@/lib/routeLog";
 import { parseMarketId } from "@/lib/validation";
 
@@ -40,6 +40,6 @@ export async function POST(req: Request) {
     return NextResponse.json(market);
   } catch (error) {
     logRouteError("market", error);
-    return NextResponse.json(serializeError(error), { status: 500 });
+    return errorResponse(error);
   }
 }

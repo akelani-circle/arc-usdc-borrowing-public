@@ -35,11 +35,12 @@ export class ApiError extends Error {
   }
 }
 
-export async function postJson<T = unknown>(path: string, body: unknown): Promise<T> {
+export async function postJson<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
   const text = await res.text();
   let data: unknown;

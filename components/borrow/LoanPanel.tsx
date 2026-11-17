@@ -32,7 +32,8 @@ import { useAsyncAction } from "@/lib/useAsyncAction";
 import { useUcwSession } from "@/contexts/UcwSessionContext";
 import { logEvent } from "@/lib/activityLog";
 
-const AMOUNT_PRESETS = ["0.00005", "0.0001", "0.0002", "0.0005"];
+// USDC amounts. These used to be cirBTC-sized (0.00005 to 0.0005), useless for a USDC loan.
+const AMOUNT_PRESETS = ["0.5", "1", "5", "10"];
 
 export function LoanPanel({
   activeLoanId,
@@ -41,7 +42,7 @@ export function LoanPanel({
   activeLoanId: string | undefined;
   onSuccess: () => void;
 }) {
-  const { session } = useUcwSession();
+  const { session, withApproval } = useUcwSession();
   const [borrowAmount, setBorrowAmount] = useState("1");
   const [repayAmount, setRepayAmount] = useState("0.1");
   const [targetHealthFactor, setTargetHealthFactor] = useState("2");
@@ -141,11 +142,13 @@ export function LoanPanel({
                 disabled={!borrowQuote.isSuccess || borrowExec.isLoading}
                 onClick={async () => {
                   const result = await borrowExec.run(() =>
-                    postJson("/api/borrow/borrow", {
-                      sessionId: session?.sessionId,
-                      amount: borrowAmount,
-                      loanId: activeLoanId,
-                    }),
+                    withApproval((signal) =>
+                      postJson(
+                        "/api/borrow/borrow",
+                        { sessionId: session?.sessionId, amount: borrowAmount, loanId: activeLoanId },
+                        signal,
+                      ),
+                    ),
                   );
                   if (result) {
                     borrowQuote.reset();
@@ -192,11 +195,13 @@ export function LoanPanel({
                     disabled={!repayQuote.isSuccess || repayExec.isLoading}
                     onClick={async () => {
                       const result = await repayExec.run(() =>
-                        postJson("/api/borrow/repay", {
-                          sessionId: session?.sessionId,
-                          loanId: activeLoanId,
-                          amount: repayAmount,
-                        }),
+                        withApproval((signal) =>
+                          postJson(
+                            "/api/borrow/repay",
+                            { sessionId: session?.sessionId, loanId: activeLoanId, amount: repayAmount },
+                            signal,
+                          ),
+                        ),
                       );
                       if (result) {
                         repayQuote.reset();
@@ -236,7 +241,9 @@ export function LoanPanel({
                   disabled={!closeQuote.isSuccess || closeExec.isLoading}
                   onClick={async () => {
                     const result = await closeExec.run(() =>
-                      postJson("/api/borrow/close", { sessionId: session?.sessionId, loanId: activeLoanId }),
+                      withApproval((signal) =>
+                        postJson("/api/borrow/close", { sessionId: session?.sessionId, loanId: activeLoanId }, signal),
+                      ),
                     );
                     if (result) {
                       closeQuote.reset();

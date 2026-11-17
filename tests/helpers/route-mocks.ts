@@ -29,6 +29,7 @@ export const ucwClient = {
   createUser: vi.fn(),
   createUserToken: vi.fn(),
   createUserPinWithWallets: vi.fn(),
+  createWallet: vi.fn(),
   updateUserPin: vi.fn(),
   restoreUserPin: vi.fn(),
   listWallets: vi.fn(),
@@ -65,6 +66,7 @@ vi.mock("@/lib/borrowKit", async () => {
   return {
     ucwClient,
     borrowKit,
+    borrowConfig: { apiKey: "TEST_API_KEY:id:secret" },
     serializeError,
     CHAIN: "Arc_Testnet",
     DEFAULT_MARKET_ID,

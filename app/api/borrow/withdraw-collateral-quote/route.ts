@@ -17,9 +17,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { borrowKit, CHAIN, serializeError } from "@/lib/borrowKit";
+import { borrowKit, CHAIN } from "@/lib/borrowKit";
 import { limits } from "@/lib/limits";
-import { badRequest, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
+import { badRequest, errorResponse, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
 import { logRouteError } from "@/lib/routeLog";
 import { parseAmount, parseLoanId, parseSlippageBps } from "@/lib/validation";
 
@@ -49,6 +49,6 @@ export async function POST(req: Request) {
     return NextResponse.json(quote);
   } catch (error) {
     logRouteError("withdraw-collateral-quote", error);
-    return NextResponse.json(serializeError(error), { status: 500 });
+    return errorResponse(error);
   }
 }

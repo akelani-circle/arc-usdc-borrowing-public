@@ -3,15 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "description": "Sample app for borrowing USDC against cirBTC on Arc Testnet with Circle Borrow Kit, User-Controlled Wallets, Morpho, and Supabase",
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/next.mjs dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/next.mjs start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
     "test:e2e": "playwright test",
     "supabase": "supabase",
     "db:start": "supabase start",
@@ -21,44 +24,65 @@
     "db:migration": "supabase migration new"
   },
   "dependencies": {
-    "@base-ui/react": "^1.3.0",
-    "@circle-fin/user-controlled-wallets": "^10.8.0",
+    "@base-ui/react": "^1.9.0",
+    "@circle-fin/user-controlled-wallets": "^10.8.1",
     "@circle-fin/w3s-pw-web-sdk": "^1.1.11",
-    "@circle-fin/adapter-circle-wallets": "1.8.1",
-    "@circle-fin/borrow-kit": "1.0.0",
+    "@circle-fin/adapter-circle-wallets": "1.10.1",
+    "@circle-fin/borrow-kit": "1.3.1",
     "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.116.0",
-    "@tanstack/react-query": "^5.91.3",
+    "@supabase/supabase-js": "^2.119.0",
+    "@tanstack/react-query": "^5.108.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.577.0",
-    "next": "16.2.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "shadcn": "^4.1.0",
-    "tailwind-merge": "^3.5.0",
+    "lucide-react": "^1.74.0",
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "shadcn": "^4.23.0",
+    "tailwind-merge": "^3.7.0",
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
-    "@tailwindcss/postcss": "^4",
-    "@testing-library/dom": "^10.4.1",
+    "@playwright/test": "^1.65.1",
+    "@tailwindcss/postcss": "^4.3.5",
+    "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
-    "@testing-library/user-event": "^14.6.7",
-    "@types/node": "^22",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@vitejs/plugin-react": "^6.1.1",
-    "@vitest/coverage-v8": "^5.0.0",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.0",
-    "jsdom": "^30.0.1",
-    "supabase": "^2.2.1",
-    "tailwindcss": "^4",
-    "typescript": "^5",
-    "vite": "^8.3.0",
-    "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^5.0.0"
+    "@testing-library/user-event": "^14.6.12",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "@vitest/coverage-v8": "^5.1.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.4.6",
+    "jsdom": "^31.0.1",
+    "supabase": "^3.2.0",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "firebase": {
+      "undici": "^6.29.1",
+      "@grpc/grpc-js": "^1.13.6"
+    },
+    "@circle-fin/w3s-pw-web-sdk": {
+      "uuid": "11.1.1"
+    },
+    "jayson": {
+      "uuid": "11.1.1",
+      "stream-json": "3.7.0"
+    },
+    "@coral-xyz/anchor": {
+      "toml": "5.0.1"
+    },
+    "@ts-morph/common": {
+      "minimatch": "11.0.1"
+    },
+    "@circle-fin/developer-controlled-wallets": {
+      "@solana/codecs-strings": "5.5.1"
+    }
   }
 }

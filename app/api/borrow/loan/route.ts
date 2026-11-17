@@ -17,9 +17,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { borrowKit, serializeError } from "@/lib/borrowKit";
+import { borrowKit } from "@/lib/borrowKit";
 import { limits } from "@/lib/limits";
-import { badRequest, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
+import { badRequest, errorResponse, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
 import { logRouteError } from "@/lib/routeLog";
 import { parseLoanId } from "@/lib/validation";
 
@@ -40,6 +40,6 @@ export async function POST(req: Request) {
     return NextResponse.json(loan);
   } catch (error) {
     logRouteError("loan", error);
-    return NextResponse.json(serializeError(error), { status: 500 });
+    return errorResponse(error);
   }
 }

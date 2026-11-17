@@ -25,13 +25,14 @@ import { useUcwSession } from "@/contexts/UcwSessionContext";
 
 const REFETCH_INTERVAL = 15_000;
 
-// Circle's KitError code for "the wallet's signing method isn't indexed yet" —
-// expected for a few seconds right after PIN setup, not a real failure. Retry
-// it on a short fixed interval instead of giving up after the default 3
-// attempts and going quiet until the next refetchInterval.
-const WALLET_NOT_READY_CODE = 1098;
-const WALLET_NOT_READY_RETRIES = 10;
-const WALLET_NOT_READY_RETRY_DELAY = 2_000;
+// Retry only what can succeed on a second try: network failures, 5xx answers and errors the
+// SDK flags as retryable. A 4xx (bad input, unknown loan) fails the same way every time.
+const MAX_RETRIES = 3;
+
+function isRetryable(error: Error) {
+  if (!(error instanceof ApiError)) return true;
+  return error.status >= 500 || error.recoverability === "RETRYABLE" || error.recoverability === "RESUMABLE";
+}
 
 // A loan action (open/borrow/repay/close) settles on-chain and then needs a
 // moment before Borrow Kit's own indexing reflects it in getLoans — the same
@@ -49,7 +50,10 @@ export function useBorrowState() {
   const marketQuery = useQuery({
     queryKey: ["borrow", "market"],
     queryFn: () => postJson<MarketInfo>("/api/borrow/market", {}),
+    // The route needs a signed-in user, and the market is only shown on the dashboard.
+    enabled: !!sessionId,
     refetchInterval: REFETCH_INTERVAL,
+    retry: (failureCount, error) => isRetryable(error) && failureCount < MAX_RETRIES,
   });
 
   const loansQuery = useQuery({
@@ -62,20 +66,16 @@ export function useBorrowState() {
     // causing this query to fire and fail repeatedly right after sign-up.
     enabled: !!sessionId && !!wallet,
     refetchInterval: REFETCH_INTERVAL,
-    retry: (failureCount, error) =>
-      error instanceof ApiError && error.code === WALLET_NOT_READY_CODE
-        ? failureCount < WALLET_NOT_READY_RETRIES
-        : failureCount < 3,
-    retryDelay: (failureCount, error) =>
-      error instanceof ApiError && error.code === WALLET_NOT_READY_CODE
-        ? WALLET_NOT_READY_RETRY_DELAY
-        : Math.min(1000 * 2 ** failureCount, 30_000),
+    retry: (failureCount, error) => isRetryable(error) && failureCount < MAX_RETRIES,
   });
 
   // Each Loan already carries collateral/borrowed/health/ltv/liquidationPrice —
   // no separate getPosition(loanId) call needed for the primary display.
+  // getLoans also returns closed loans, so pick the open one: a closed loan
+  // can't be repaid, closed or grown, and a new loan can only be opened once
+  // none is active.
   const loans = loansQuery.data?.loans ?? [];
-  const activeLoan = loans[0];
+  const activeLoan = loans.find((loan) => loan.status === "active");
 
   function refetchAll() {
     for (const delay of POST_ACTION_REFETCH_DELAYS) {

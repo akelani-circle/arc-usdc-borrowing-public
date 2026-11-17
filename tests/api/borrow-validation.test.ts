@@ -18,6 +18,7 @@
 
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { KitError } from "@circle-fin/borrow-kit";
 
 import { ALICE, DEFAULT_MARKET_ID, borrowKit, liveSession, post, signIn } from "../helpers/route-mocks";
 
@@ -281,5 +282,47 @@ describe("error reporting", () => {
     const logged = JSON.stringify((console.error as unknown as { mock: { calls: unknown[][] } }).mock.calls);
     expect(logged).toContain("Request failed");
     expect(logged).not.toContain("TEST_API_KEY");
+  });
+});
+
+describe("error statuses", () => {
+  // Every SDK failure used to come back as a 500.
+  it("answers with the status the Borrow Kit error calls for", async () => {
+    const sessionId = await asAlice();
+    borrowKit.closeLoan.mockRejectedValue(
+      new KitError({ name: "BORROW_LOAN_NOT_FOUND", message: "Loan not found", code: 1200, type: "INPUT", recoverability: "FATAL" }),
+    );
+    const res = await call("close", { sessionId, loanId: "loan-1" });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: 1200, message: "Loan not found" });
+
+    borrowKit.getMarket.mockRejectedValue(
+      new KitError({ name: "BORROW_UPSTREAM_UNAVAILABLE", message: "Try later", code: 8204, type: "SERVICE", recoverability: "RETRYABLE" }),
+    );
+    expect((await call("market", {})).status).toBe(503);
+  });
+});
+
+describe("API key", () => {
+  // Borrow Kit 1.0.0 refuses the key everywhere but borrow and getBorrowQuote.
+  it("is passed to borrow and getBorrowQuote only", async () => {
+    const sessionId = await asAlice();
+    borrowKit.borrow.mockResolvedValue({});
+    borrowKit.getBorrowQuote.mockResolvedValue({});
+    borrowKit.getLoans.mockResolvedValue({ loans: [] });
+
+    await call("borrow", { sessionId, amount: "1" });
+    await call("borrow", { sessionId, amount: "1", loanId: "loan-1" });
+    await call("borrow-quote", { sessionId, amount: "1" });
+    await call("borrow-quote", { sessionId, amount: "1", loanId: "loan-1" });
+    await call("loans", { sessionId });
+
+    const key = { apiKey: "TEST_API_KEY:id:secret" };
+    for (const [args] of [...borrowKit.borrow.mock.calls, ...borrowKit.getBorrowQuote.mock.calls]) {
+      expect(args.config).toEqual(key);
+    }
+    expect(borrowKit.borrow).toHaveBeenCalledTimes(2);
+    expect(borrowKit.getBorrowQuote).toHaveBeenCalledTimes(2);
+    expect(borrowKit.getLoans.mock.calls[0][0]).not.toHaveProperty("config");
   });
 });

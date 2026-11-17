@@ -17,6 +17,7 @@ for developers exploring the borrowing flow on testnet.
 - [How It Works](#how-it-works)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
+- [Getting testnet funds](#getting-testnet-funds)
 - [Environment Variables](#environment-variables)
 - [Available Scripts](#available-scripts)
 - [Testing](#testing)
@@ -51,17 +52,22 @@ A single dashboard (`/`) provides:
 
 ## Prerequisites
 
-- **Node.js v22+** — Install via [nvm](https://github.com/nvm-sh/nvm)
+- **Node.js 22.22.2+ or 24.15+** (or 26+) — Install via [nvm](https://github.com/nvm-sh/nvm). The app
+  itself runs on Node 22+, but the test tooling (`jsdom` 31) needs these versions, and `npm ci`
+  warns on older ones.
+- **Docker**, for the local Supabase stack (auth and the `wallet_accounts` / `activity_log` tables)
 - Circle User-Controlled Wallets **[API key](https://console.circle.com/signin)**
 - A Circle **App ID**, issued alongside the API key, for the W3S PIN widget
+- Testnet **cirBTC** and a little **USDC** on Arc Testnet in your Circle wallet, to open a loan
+  (see [Getting testnet funds](#getting-testnet-funds))
 
 ## Getting Started
 
 1. Clone the repository and install dependencies:
 
    ```bash
-   git clone git@github.com:akelani-circle/arc-usdc-loans.git
-   cd arc-usdc-loans
+   git clone https://github.com/circlefin/arc-usdc-borrowing.git
+   cd arc-usdc-borrowing
    npm install
    ```
 
@@ -71,15 +77,46 @@ A single dashboard (`/`) provides:
    cp .env.example .env.local
    ```
 
-   Then edit `.env.local` and fill in all required values (see [Environment Variables](#environment-variables) below).
+   Then edit `.env.local` and fill in the Circle values (see [Environment Variables](#environment-variables) below).
 
-3. Start the development server:
+3. Start the local Supabase stack (Docker must be running). The first start pulls the images
+   and applies the migrations in `supabase/migrations`:
+
+   ```bash
+   npm run db:start
+   npm run db:status -- -o env
+   ```
+
+   Copy `API_URL` into `NEXT_PUBLIC_SUPABASE_URL`, `PUBLISHABLE_KEY` (or `ANON_KEY`) into
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SECRET_KEY` into `SUPABASE_SECRET_KEY` in `.env.local`.
+   Email confirmation is off locally, so sign-up works without an inbox. Stop the stack with
+   `npm run db:stop`. To use a hosted Supabase project instead, apply the migrations to it
+   (`npx supabase link` then `npx supabase db push`) and use its URL and keys.
+
+4. Start the development server:
 
    ```bash
    npm run dev
    ```
 
-   The app will be available at `http://localhost:3000` (or `$PORT`).
+   The app will be available at `http://localhost:3000`, or on the `PORT` set in `.env.local`
+   or in your shell (the shell wins).
+
+5. Sign up, set your PIN, then fund the wallet address the dashboard shows with cirBTC and USDC
+   before opening a loan.
+
+## Getting testnet funds
+
+- **cirBTC** (collateral): use Circle's faucet at [faucet.circle.com](https://faucet.circle.com).
+  Pick **cirBTC** and **Arc Testnet**, and paste your wallet address. The faucet has a captcha,
+  so a person has to request it, and it limits how often each address can ask. The Arc Testnet
+  cirBTC contract is `0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF` (8 decimals), as listed in
+  [Circle's cirBTC contract addresses](https://developers.circle.com/assets/cirbtc-contract-addresses).
+- **USDC**: same faucet, with **USDC** and **Arc Testnet**. USDC also pays Arc's gas, and you
+  need some to repay or close a loan.
+
+Small amounts are enough. On testnet, a 1 USDC loan needed about 0.00002 to 0.00003 cirBTC of
+collateral: use **Check collateral** for the current figure.
 
 ## Environment Variables
 
@@ -99,8 +136,8 @@ SUPABASE_SECRET_KEY=your_supabase_secret_key_here
 # Arc Testnet RPC (optional)
 # BORROW_RPC_URL=
 
-# Optional — defaults to 3000 via `next dev`/`next start`
-PORT=
+# Optional — port for `npm run dev` / `npm run start` (default 3000)
+# PORT=3000
 ```
 
 | Variable | Scope | Purpose |
@@ -111,7 +148,7 @@ PORT=
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Supabase project URL and publishable key. Row level security scopes every read to the signed-in user. |
 | `SUPABASE_SECRET_KEY` | Server-side, secret | Supabase secret key. Only used by `/api/wallet-accounts/sync` to save the user's wallet: users can no longer write `wallet_accounts` themselves. Locally, `supabase status -o env` prints it as `SECRET_KEY`. |
 | `BORROW_RPC_URL` | Server-side | Optional. Arc Testnet RPC override — Borrow Kit defaults to a public RPC. |
-| `PORT` | N/A | Optional. Defaults to `3000` via `next dev`/`next start`. |
+| `PORT` | N/A | Optional. Port for `npm run dev` and `npm run start`, default `3000`. `next` itself only reads `PORT` from the shell, so these scripts go through `scripts/next.mjs`, which reads it from `.env.local`. A `PORT` set in the shell wins. |
 
 ## Available Scripts
 
@@ -121,7 +158,7 @@ PORT=
 - `npm run lint` — Run ESLint
 - `npm test` — Run the unit tests (no services needed)
 - `npm run test:integration` — Run database tests against the local Supabase (`npm run db:start` first)
-- `npm run test:e2e` — Run the Playwright end-to-end tests (mocks Supabase auth and the app's own API)
+- `npm run test:e2e` — Run the Playwright end-to-end tests (mocks Supabase auth and the app's own API; run `npx playwright install chromium` once first)
 - `npm run supabase` — Run the Supabase CLI (e.g. `npm run supabase -- status`)
 - `npm run db:start` / `db:stop` / `db:status` / `db:reset` — Manage the local Supabase instance
 - `npm run db:migration` — Create a new migration
@@ -132,8 +169,12 @@ PORT=
 npm test                  # unit and route tests: no network, database or Circle credentials
 npm run db:start          # local Supabase (Docker)
 npm run test:integration  # row level security and table limits, against the local database
+npx playwright install chromium   # once: downloads the browser Playwright drives
 npm run test:e2e          # Playwright; mocks Supabase auth and the app's own API in the browser
 ```
+
+`npm run test:e2e` starts its own dev server on port 3100, or reuses one already running
+there. Set `E2E_PORT` to use another port, e.g. `E2E_PORT=3200 npm run test:e2e`.
 
 The integration tests read `.env.local` and create and delete only their own users, so a local
 database that already holds data is safe. The route tests replace Supabase, Circle and the

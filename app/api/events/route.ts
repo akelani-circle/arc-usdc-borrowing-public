@@ -41,16 +41,18 @@ export async function GET(req: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
-      session.pushChallenge = (challengeId: string) => {
+      const pushChallenge = (challengeId: string) => {
         controller.enqueue(
           encoder.encode(sseFrame("challenge", JSON.stringify({ challengeId }))),
         );
       };
+      session.pushChallenge = pushChallenge;
 
       controller.enqueue(encoder.encode(sseFrame("ready", sessionId)));
 
       req.signal.addEventListener("abort", () => {
-        if (getSession(sessionId, auth.user.id)?.pushChallenge === session.pushChallenge) {
+        // A reconnect may already have attached a newer stream; only detach our own pusher.
+        if (session.pushChallenge === pushChallenge) {
           session.pushChallenge = undefined;
         }
         try {
