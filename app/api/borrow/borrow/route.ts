@@ -17,10 +17,10 @@
  */
 
 import { NextResponse } from "next/server";
-import { borrowKit, CHAIN, DEFAULT_MARKET_ID, serializeError } from "@/lib/borrowKit";
+import { borrowConfig, borrowKit, CHAIN, DEFAULT_MARKET_ID } from "@/lib/borrowKit";
 import { createAdapter } from "@/lib/adapter";
 import { limits } from "@/lib/limits";
-import { badRequest, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
+import { badRequest, errorResponse, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
 import { logRouteError } from "@/lib/routeLog";
 import { requireLiveSession } from "@/lib/session";
 import { parseAmount, parseLoanId, parseMarketId, parseSlippageBps } from "@/lib/validation";
@@ -57,16 +57,18 @@ export async function POST(req: Request) {
           loanId: loanId.value,
           borrowAmount: amount.value,
           slippageBps: slippageBps.value,
+          config: borrowConfig,
         })
       : await borrowKit.borrow({
           from: { adapter, chain: CHAIN },
           marketId: marketId.value,
           borrowAmount: amount.value,
           slippageBps: slippageBps.value,
+          config: borrowConfig,
         });
     return NextResponse.json(result);
   } catch (error) {
     logRouteError("borrow", error);
-    return NextResponse.json(serializeError(error), { status: 500 });
+    return errorResponse(error);
   }
 }

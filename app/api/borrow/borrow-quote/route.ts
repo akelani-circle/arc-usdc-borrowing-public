@@ -17,10 +17,10 @@
  */
 
 import { NextResponse } from "next/server";
-import { borrowKit, CHAIN, DEFAULT_MARKET_ID, Blockchain, getChainByEnum, serializeError } from "@/lib/borrowKit";
+import { borrowConfig, borrowKit, CHAIN, DEFAULT_MARKET_ID, Blockchain, getChainByEnum } from "@/lib/borrowKit";
 import { createAdapter } from "@/lib/adapter";
 import { limits } from "@/lib/limits";
-import { badRequest, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
+import { badRequest, errorResponse, readJsonBody, requireUser, tooManyRequests } from "@/lib/routeAuth";
 import { logRouteError } from "@/lib/routeLog";
 import { requireLiveSession } from "@/lib/session";
 import { parseAmount, parseLoanId, parseMarketId, parseSlippageBps } from "@/lib/validation";
@@ -51,17 +51,23 @@ export async function POST(req: Request) {
     const walletAddress = await adapter.getAddress(getChainByEnum(Blockchain.Arc_Testnet));
     // SDK: loanId = borrow more; marketId = open a new loan (mutually exclusive).
     const quote = loanId?.ok
-      ? await borrowKit.getBorrowQuote({ loanId: loanId.value, borrowAmount: amount.value, slippageBps: slippageBps.value })
+      ? await borrowKit.getBorrowQuote({
+          loanId: loanId.value,
+          borrowAmount: amount.value,
+          slippageBps: slippageBps.value,
+          config: borrowConfig,
+        })
       : await borrowKit.getBorrowQuote({
           walletAddress,
           chain: CHAIN,
           marketId: marketId.value,
           borrowAmount: amount.value,
           slippageBps: slippageBps.value,
+          config: borrowConfig,
         });
     return NextResponse.json({ walletAddress, quote });
   } catch (error) {
     logRouteError("borrow-quote", error);
-    return NextResponse.json(serializeError(error), { status: 500 });
+    return errorResponse(error);
   }
 }

@@ -17,9 +17,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { serializeError, ucwClient } from "@/lib/borrowKit";
+import { ucwClient } from "@/lib/borrowKit";
 import { limits } from "@/lib/limits";
-import { requireUser, tooManyRequests } from "@/lib/routeAuth";
+import { errorResponse, requireUser, tooManyRequests } from "@/lib/routeAuth";
 import { logRouteError } from "@/lib/routeLog";
 import { createSession } from "@/lib/session";
 
@@ -47,6 +47,6 @@ export async function POST() {
     });
   } catch (error) {
     logRouteError("pin/token", error);
-    return NextResponse.json(serializeError(error), { status: 500 });
+    return errorResponse(error);
   }
 }

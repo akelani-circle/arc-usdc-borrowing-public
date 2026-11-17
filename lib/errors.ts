@@ -19,13 +19,14 @@
 import { ApiError } from "@/lib/api";
 
 /**
- * User-friendly messages keyed by BorrowKit's real numeric error codes
- * (confirmed against the installed SDK's `BorrowError` registry — codes
- * 1200-1214 are input errors, fix the request before retrying; 8200-8202 are
- * transient service errors, safe to retry as-is).
+ * User-friendly messages keyed by the numeric `KitError` codes Borrow Kit and the Circle wallet
+ * adapter really throw (checked against the installed SDKs' error registries). 1200-1225 are
+ * Borrow input errors: fix the request before retrying. 8200-8204 are transient service errors.
  */
 const MESSAGES: Record<number, string> = {
-  1007: "Your wallet doesn't hold enough of the loan asset to cover this repayment — add more USDC (or partially repay first) before closing.",
+  // The Borrow Service answered 422 without a more specific code, e.g. a close the wallet can't pay for.
+  1007: "The Borrow Service couldn't process this. Check your wallet holds enough USDC and cirBTC for it.",
+  1099: "You cancelled the PIN approval.",
   1200: "That loan ID doesn't exist or has already been closed.",
   1201: "Your approval signature was missing, expired, or invalid. Try again.",
   1202: "This loan belongs to a different wallet.",
@@ -41,10 +42,31 @@ const MESSAGES: Record<number, string> = {
   1212: "This loan is liquidatable — you can't add more debt to it.",
   1213: "That quote expired — get a fresh one and try again.",
   1214: "You already have a loan in this market — grow the existing one instead.",
+  1215: "That request already went through. Refresh to see the result.",
+  1216: "That's more collateral than the loan holds.",
+  1217: "That's more than the loan owes. Use Close loan to repay everything.",
+  1219: "You've reached the maximum number of open loans.",
+  1220: "This market's data isn't available right now. Try again later.",
+  1222: "Your existing loan in this market can't be used here.",
+  1223: "This loan has no debt left. Borrow against it first.",
+  1224: "Your wallet doesn't hold enough cirBTC for this loan. Add cirBTC or borrow less.",
+  3001: "Can't reach the network. Please try again.",
+  // The wallet adapter gave up waiting, but Circle doesn't cancel the challenge: approving it
+  // later still sends the transaction.
+  3002: "The PIN approval timed out. It wasn't cancelled, so refresh to check your loan before trying again.",
+  5001: "The transaction failed on-chain.",
+  5002: "The transaction would fail on-chain, so it wasn't sent.",
+  7001: "Too many requests. Wait a moment and try again.",
   8200: "A transient backend error occurred — please retry.",
   8201: "The SDK is out of date for this response — please retry.",
   8202: "Temporary issue fetching reward data — please retry.",
+  8203: "Your loan data is still updating. Try again in a moment.",
+  8204: "The Borrow Service is temporarily unavailable. Try again in a moment.",
+  9001: "Your wallet doesn't hold enough of this token.",
+  9002: "Your wallet doesn't hold enough USDC to pay the network fee.",
 };
+
+const UNREVOKED_TIMEOUT = 3002;
 
 export interface FriendlyError {
   /** Always safe to render — plain language, no stack traces or hex blobs. */
@@ -186,8 +208,11 @@ export function rawMessage(err: unknown): string {
 
 export function parseKitError(error: unknown): FriendlyError {
   if (error instanceof ApiError) {
+    // The SDK flags a timed-out PIN approval (3002) as retryable, but the challenge is still live:
+    // retrying blindly could send the transaction twice.
     const retryable =
-      error.recoverability === "RETRYABLE" || error.recoverability === "RESUMABLE";
+      (error.recoverability === "RETRYABLE" || error.recoverability === "RESUMABLE") &&
+      error.code !== UNREVOKED_TIMEOUT;
     const mapped = error.code !== undefined ? MESSAGES[error.code] : undefined;
     const clean = stripInternalPrefix(error.message);
 

@@ -21,7 +21,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useBorrowState } from "@/hooks/useBorrowState";
-import { postJson } from "@/lib/api";
+import { ApiError, postJson } from "@/lib/api";
 import { useUcwSession } from "@/contexts/UcwSessionContext";
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -92,7 +92,8 @@ describe("useBorrowState loans query gating", () => {
     expect(loansCalls()[0][1]).toEqual({ sessionId: "sess-1" });
   });
 
-  it("stays disabled with no session at all", async () => {
+  // The market route needs a signed-in user; it used to be polled while signed out too.
+  it("calls neither route with no session at all", async () => {
     mockedUseUcwSession.mockReturnValue({
       session: undefined,
       wallet: undefined,
@@ -100,10 +101,83 @@ describe("useBorrowState loans query gating", () => {
 
     renderHook(() => useBorrowState(), { wrapper });
 
-    await waitFor(() => {
-      expect(mockedPostJson).toHaveBeenCalledWith("/api/borrow/market", {});
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockedPostJson).not.toHaveBeenCalled();
+  });
+});
+
+const signedIn = {
+  session: { sessionId: "sess-1", userToken: "tok", encryptionKey: "key" },
+  wallet: { id: "w1", address: "0xabc", blockchain: "ARC-TESTNET" },
+} as ReturnType<typeof useUcwSession>;
+
+describe("useBorrowState active loan", () => {
+  // getLoans also returns closed loans. Taking loans[0] kept a closed loan on screen as
+  // "Active", with Close and Borrow more buttons that could only fail.
+  it("ignores closed loans", async () => {
+    mockedUseUcwSession.mockReturnValue(signedIn);
+    mockedPostJson.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === "/api/borrow/loans"
+          ? { walletAddress: "0xabc", loans: [{ loanId: "old", status: "closed" }, { loanId: "new", status: "active" }] }
+          : {},
+      ),
+    );
+
+    const { result } = renderHook(() => useBorrowState(), { wrapper });
+    await waitFor(() => expect(result.current.activeLoanId).toBe("new"));
+    expect(result.current.position).toMatchObject({ loanId: "new" });
+  });
+
+  it("has no active loan when every loan is closed", async () => {
+    mockedUseUcwSession.mockReturnValue(signedIn);
+    mockedPostJson.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === "/api/borrow/loans" ? { walletAddress: "0xabc", loans: [{ loanId: "old", status: "closed" }] } : {},
+      ),
+    );
+
+    const { result } = renderHook(() => useBorrowState(), { wrapper });
+    await waitFor(() => expect(result.current.loans).toHaveLength(1));
+    expect(result.current.activeLoanId).toBeUndefined();
+    expect(result.current.position).toBeUndefined();
+  });
+});
+
+describe("useBorrowState retries", () => {
+  function retryingWrapper({ children }: { children: ReactNode }) {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { refetchInterval: false, retryDelay: 1 } },
     });
-    expect(loansCalls()).toHaveLength(0);
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  }
+
+  // Code 1098 is Borrow Kit's generic validation failure, not "wallet not ready yet". It was
+  // retried ten times; a 4xx fails the same way every time, so it isn't retried at all.
+  it("does not retry a 4xx", async () => {
+    mockedUseUcwSession.mockReturnValue(signedIn);
+    mockedPostJson.mockImplementation((path: string) =>
+      path === "/api/borrow/loans"
+        ? Promise.reject(new ApiError({ message: "Validation failed", code: 1098, recoverability: "FATAL" }, 400))
+        : Promise.resolve({}),
+    );
+
+    const { result } = renderHook(() => useBorrowState(), { wrapper: retryingWrapper });
+    await waitFor(() => expect(result.current.isLoansLoading).toBe(false));
+    expect(loansCalls()).toHaveLength(1);
+  });
+
+  it("retries a 5xx", async () => {
+    mockedUseUcwSession.mockReturnValue(signedIn);
+    mockedPostJson.mockImplementation((path: string) =>
+      path === "/api/borrow/loans"
+        ? Promise.reject(new ApiError({ message: "Service unavailable", code: 8204 }, 503))
+        : Promise.resolve({}),
+    );
+
+    const { result } = renderHook(() => useBorrowState(), { wrapper: retryingWrapper });
+    await waitFor(() => expect(result.current.isLoansLoading).toBe(false));
+    expect(loansCalls()).toHaveLength(4);
   });
 });
 

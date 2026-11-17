@@ -42,20 +42,37 @@ async function load(env: Record<string, string | undefined>) {
   (globalThis as unknown as { borrowKit?: unknown; ucwClient?: unknown }).borrowKit = undefined;
   vi.resetModules();
   providerConfigs.length = 0;
-  await import("@/lib/borrowKit");
-  return providerConfigs[0] as Record<string, unknown>;
+  const mod = await import("@/lib/borrowKit");
+  return { provider: providerConfigs[0] as Record<string, unknown>, borrowConfig: mod.borrowConfig };
 }
 
 beforeEach(() => vi.resetAllMocks());
 
 describe("Borrow service authentication", () => {
-  it("uses the Circle API key", async () => {
-    const config = await load({ CIRCLE_API_KEY: "TEST_API_KEY:id:secret", BORROW_BASE_URL: "https://api.circle.com" });
-    expect(config).toEqual({ apiKey: "TEST_API_KEY:id:secret", baseUrl: "https://api.circle.com" });
+  // Borrow Kit 1.0.0 refuses a configured key on every call but borrow and getBorrowQuote, so a
+  // key on the provider made loans, market and every quote fail.
+  it("keeps the API key off the provider and hands it to the calls that take it", async () => {
+    const { provider, borrowConfig } = await load({
+      CIRCLE_API_KEY: "TEST_API_KEY:id:secret",
+      BORROW_BASE_URL: "https://api.circle.com",
+    });
+    expect(provider).toEqual({ baseUrl: "https://api.circle.com" });
+    expect(borrowConfig).toEqual({ apiKey: "TEST_API_KEY:id:secret" });
   });
 
   it("only sets what is configured", async () => {
-    const config = await load({ CIRCLE_API_KEY: undefined, BORROW_BASE_URL: undefined });
-    expect(config).toEqual({});
+    const { provider, borrowConfig } = await load({ CIRCLE_API_KEY: undefined, BORROW_BASE_URL: undefined });
+    expect(provider).toEqual({});
+    expect(borrowConfig).toBeUndefined();
+  });
+});
+
+describe("Borrow Kit 1.0.0 key policy", () => {
+  it("rejects a provider-level key on reads before any request is sent", async () => {
+    const actual = await vi.importActual<typeof import("@circle-fin/borrow-kit")>("@circle-fin/borrow-kit");
+    const keyed = new actual.BorrowServiceProvider({ apiKey: "TEST_API_KEY:id:secret" });
+    await expect(
+      keyed.getLoans({ walletAddress: "0x1111111111111111111111111111111111111111", chain: "Arc_Testnet" }),
+    ).rejects.toMatchObject({ code: 1098, message: expect.stringContaining("does not accept an API key") });
   });
 });

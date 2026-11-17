@@ -90,3 +90,54 @@ describe("/api/pin/*: pool of limits", () => {
     expect((await call("token")).status).toBe(429);
   });
 });
+
+describe("/api/pin/setup for a user Circle already set up", () => {
+  const alreadyInitialized = () =>
+    ucwClient.createUserPinWithWallets.mockRejectedValue(
+      Object.assign(new Error("The user had already been initialized."), { code: 155106, status: 409 }),
+    );
+
+  // The app's wallet_accounts row can be missing for a user who already has a PIN and a
+  // wallet. Setup answered 155106 as an error, and the setup screen retried it forever.
+  it("returns a session without a challenge when the wallet already exists", async () => {
+    signIn(ALICE);
+    circleReturnsCredentials();
+    alreadyInitialized();
+    ucwClient.listWallets.mockResolvedValue({ data: { wallets: [{ id: "w1" }] } });
+
+    const res = await call("setup");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.challengeId).toBeUndefined();
+    expect(sessions.get(body.sessionId)).toMatchObject({ userId: ALICE, userToken: "user-token" });
+    expect(ucwClient.createWallet).not.toHaveBeenCalled();
+  });
+
+  it("creates just the wallet when the user has a PIN but no wallet", async () => {
+    signIn(ALICE);
+    circleReturnsCredentials();
+    alreadyInitialized();
+    ucwClient.listWallets.mockResolvedValue({ data: { wallets: [] } });
+    ucwClient.createWallet.mockResolvedValue({ data: { challengeId: "c4" } });
+
+    const body = await (await call("setup")).json();
+    expect(body.challengeId).toBe("c4");
+    expect(ucwClient.createWallet).toHaveBeenCalledWith({
+      userToken: "user-token",
+      accountType: "SCA",
+      blockchains: ["ARC-TESTNET"],
+    });
+  });
+
+  it("still reports other Circle errors, with Circle's status", async () => {
+    signIn(ALICE);
+    circleReturnsCredentials();
+    ucwClient.createUserPinWithWallets.mockRejectedValue(
+      Object.assign(new Error("The userToken had expired."), { code: 155104, status: 400 }),
+    );
+
+    const res = await call("setup");
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ message: "The userToken had expired.", code: 155104 });
+  });
+});

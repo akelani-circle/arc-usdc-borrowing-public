@@ -18,7 +18,7 @@
 
 import { describe, expect, it } from "vitest";
 import { KitError } from "@circle-fin/borrow-kit";
-import { serializeError } from "@/lib/kitErrorTypes";
+import { errorStatus, serializeError } from "@/lib/kitErrorTypes";
 
 describe("serializeError", () => {
   it("pulls code/name/type/recoverability off a real KitError", () => {
@@ -46,7 +46,8 @@ describe("serializeError", () => {
       type: "INPUT",
       recoverability: "FATAL",
     };
-    expect(serializeError(plainObject)).toEqual({ message: "[object Object]" });
+    // Only the numeric code survives: the Circle wallets SDK's errors carry one too.
+    expect(serializeError(plainObject)).toEqual({ message: "[object Object]", code: 1098 });
   });
 
   it("falls back to .message for a plain Error", () => {
@@ -55,5 +56,47 @@ describe("serializeError", () => {
 
   it("stringifies anything else rather than losing it", () => {
     expect(serializeError("just a string")).toEqual({ message: "just a string" });
+  });
+});
+
+describe("errorStatus", () => {
+  const kit = (code: number, type: string) =>
+    new KitError({ name: "TEST_ERROR", message: "test", code, type: type as never, recoverability: "FATAL" });
+
+  // Every SDK failure used to come back as a 500.
+  it.each([
+    [1200, "INPUT", 404],
+    [1202, "INPUT", 403],
+    [1214, "INPUT", 409],
+    [1211, "INPUT", 422],
+    [1098, "INPUT", 400],
+    [1099, "INPUT", 400],
+    [9001, "BALANCE", 422],
+    [5001, "ONCHAIN", 422],
+    [7001, "RATE_LIMIT", 429],
+    [3001, "NETWORK", 502],
+    [3002, "NETWORK", 504],
+    [8200, "SERVICE", 502],
+    [8204, "SERVICE", 503],
+    [0, "UNKNOWN", 500],
+  ])("maps KitError %i (%s) to %i", (code, type, status) => {
+    expect(errorStatus(kit(code, type))).toBe(status);
+  });
+
+  it("keeps a Circle API client error's status", () => {
+    expect(errorStatus(Object.assign(new Error("already initialized"), { code: 155106, status: 409 }))).toBe(409);
+    expect(errorStatus(Object.assign(new Error("bad request"), { status: 400 }))).toBe(400);
+  });
+
+  it("reports Circle rejecting the app's own credentials, or failing, as a bad gateway", () => {
+    expect(errorStatus(Object.assign(new Error("unauthorized"), { status: 401 }))).toBe(502);
+    expect(errorStatus(Object.assign(new Error("forbidden"), { status: 403 }))).toBe(502);
+    expect(errorStatus(Object.assign(new Error("down"), { status: 503 }))).toBe(502);
+  });
+
+  it("falls back to 500 for anything else", () => {
+    expect(errorStatus(new Error("boom"))).toBe(500);
+    expect(errorStatus("boom")).toBe(500);
+    expect(errorStatus(null)).toBe(500);
   });
 });

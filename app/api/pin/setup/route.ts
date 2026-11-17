@@ -17,9 +17,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { serializeError, ucwClient } from "@/lib/borrowKit";
+import { ucwClient } from "@/lib/borrowKit";
 import { limits } from "@/lib/limits";
-import { requireUser, tooManyRequests } from "@/lib/routeAuth";
+import { errorResponse, requireUser, tooManyRequests } from "@/lib/routeAuth";
 import { logRouteError } from "@/lib/routeLog";
 import { createSession } from "@/lib/session";
 
@@ -29,6 +29,28 @@ async function mintToken(userId: string) {
     throw new Error("We couldn't start your wallet setup. Please try again.");
   }
   return { userToken: data.userToken, encryptionKey: data.encryptionKey };
+}
+
+const WALLET = { accountType: "SCA" as const, blockchains: ["ARC-TESTNET" as const] };
+
+/**
+ * The challenge that sets up this user's PIN and wallet, or undefined when there is nothing
+ * left to set up. A user who already has a PIN (155106) lands here when the app lost its
+ * `wallet_accounts` row: they only need a wallet if they have none, and otherwise just a
+ * session, so the browser can find the wallet and save the row again. Before, this answered
+ * 155106 as an error and the wallet setup screen retried it forever.
+ */
+async function startSetup(userToken: string): Promise<string | undefined> {
+  try {
+    const { data } = await ucwClient.createUserPinWithWallets({ userToken, ...WALLET });
+    return data?.challengeId;
+  } catch (error) {
+    if ((error as { code?: number })?.code !== 155106) throw error;
+  }
+  const { data: list } = await ucwClient.listWallets({ userToken });
+  if (list?.wallets?.length) return undefined;
+  const { data } = await ucwClient.createWallet({ userToken, ...WALLET });
+  return data?.challengeId;
 }
 
 export async function POST() {
@@ -47,21 +69,12 @@ export async function POST() {
     }
 
     const { userToken, encryptionKey } = await mintToken(userId);
-    const { data: pin } = await ucwClient.createUserPinWithWallets({
-      userToken,
-      accountType: "SCA",
-      blockchains: ["ARC-TESTNET"],
-    });
+    const challengeId = await startSetup(userToken);
 
     const sessionId = createSession(userId, userToken, encryptionKey);
-    return NextResponse.json({
-      sessionId,
-      userToken,
-      encryptionKey,
-      challengeId: pin?.challengeId,
-    });
+    return NextResponse.json({ sessionId, userToken, encryptionKey, challengeId });
   } catch (error) {
     logRouteError("pin/setup", error);
-    return NextResponse.json(serializeError(error), { status: 500 });
+    return errorResponse(error);
   }
 }

@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "description": "Sample app for borrowing USDC against cirBTC on Arc Testnet with Circle Borrow Kit, User-Controlled Wallets, Morpho, and Supabase",
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/next.mjs dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/next.mjs start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -32,7 +35,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.577.0",
-    "next": "16.4.1",
+    "next": "16.4.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "shadcn": "^4.1.0",
@@ -50,15 +53,21 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.1.1",
-    "@vitest/coverage-v8": "^5.0.0",
+    "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^9",
-    "eslint-config-next": "16.2.0",
+    "eslint-config-next": "16.4.6",
     "jsdom": "^30.0.1",
     "supabase": "^2.2.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^8.3.4",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^5.0.0"
+    "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "firebase": {
+      "undici": "^6.29.1",
+      "@grpc/grpc-js": "^1.13.6"
+    }
   }
 }

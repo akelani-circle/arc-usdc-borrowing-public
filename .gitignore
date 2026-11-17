@@ -26,3 +26,7 @@ next-env.d.ts
 /test-results
 /playwright-report
 /blob-report
+
+# written by `next dev` when it detects an AI coding agent
+/AGENTS.md
+/CLAUDE.md

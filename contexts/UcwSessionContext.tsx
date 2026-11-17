@@ -30,6 +30,7 @@ import {
 import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, postJson } from "@/lib/api";
+import { logEvent } from "@/lib/activityLog";
 import { humanize } from "@/lib/errors";
 import { useAuthSession } from "@/contexts/AuthContext";
 
@@ -71,7 +72,13 @@ async function getJsonWithAuthRetry<T>(endpoint: string): Promise<T> {
       await new Promise((r) => setTimeout(r, AUTH_COOKIE_RETRY_DELAY));
       continue;
     }
-    return res.json() as Promise<T>;
+    const data = await res.json().catch(() => null);
+    // An error body is not the data: `{ message: "Not authenticated" }` read as
+    // `{ hasWallet }` used to look like "this user has no wallet".
+    if (!res.ok) {
+      throw new ApiError({ ...data, message: data?.message || `Request failed (${res.status})` }, res.status);
+    }
+    return data as T;
   }
 }
 
@@ -106,6 +113,12 @@ interface UcwSessionValue {
   resetPin: () => Promise<void>;
   recoverPin: () => Promise<void>;
   refreshWallet: () => Promise<void>;
+  /**
+   * Runs a request that ends in a PIN challenge. The signal aborts it if the user dismisses
+   * the challenge, so the action fails right away instead of waiting out the server's
+   * 10-minute approval timeout.
+   */
+  withApproval: <T>(request: (signal: AbortSignal) => Promise<T>) => Promise<T>;
   disconnect: () => void;
 }
 
@@ -155,6 +168,11 @@ export function UcwSessionProvider({ children }: { children: ReactNode }) {
   const sessionRef = useRef<BrowserSession | undefined>(undefined);
   const autoResumeAttempted = useRef(false);
   const autoCreateAttempted = useRef(false);
+  const approvalRef = useRef<AbortController | undefined>(undefined);
+  const userIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    userIdRef.current = user?.id;
+  }, [user]);
 
   const loadWallet = useCallback(async (userToken: string, retries = 0) => {
     let wallets: WalletInfo[] = [];
@@ -179,11 +197,12 @@ export function UcwSessionProvider({ children }: { children: ReactNode }) {
     // though the wallet itself was created fine underneath it).
     setError(null);
     // Fire-and-forget cache write — keeps wallet_accounts self-healing without blocking the UI.
+    // A failure is logged, not swallowed: without the row the next sign-in can't find the wallet.
     void postJson("/api/wallet-accounts/sync", {
       walletId: w.id,
       address: w.address,
       blockchain: w.blockchain,
-    }).catch(() => {});
+    }).catch((err) => logEvent("Save wallet — error", humanize(err)));
     const { tokenBalances = [] } = await postJson<{
       tokenBalances?: { amount: string; token: { symbol?: string; name?: string } }[];
     }>("/api/wallets/balances", { userToken, walletId: w.id });
@@ -220,6 +239,9 @@ export function UcwSessionProvider({ children }: { children: ReactNode }) {
             challengeId,
           });
         })().catch((err) => {
+          // The request that raised this challenge would otherwise keep waiting for an
+          // approval that can no longer come.
+          approvalRef.current?.abort(err);
           setError(humanize(err).title);
         });
       });
@@ -286,17 +308,30 @@ export function UcwSessionProvider({ children }: { children: ReactNode }) {
     await loadWallet(session.userToken);
   }, [session, loadWallet]);
 
+  const withApproval = useCallback(async <T,>(request: (signal: AbortSignal) => Promise<T>) => {
+    const controller = new AbortController();
+    approvalRef.current = controller;
+    try {
+      return await request(controller.signal);
+    } finally {
+      if (approvalRef.current === controller) approvalRef.current = undefined;
+    }
+  }, []);
+
+  // Sign-out follows right after, and its "signed-out" pass re-arms auto-resume and
+  // auto-create. Re-arming them here, while still signed in, made the effect below resume
+  // the old user mid sign-out, and its late answer then blocked wallet creation for the
+  // next user to sign up in this tab.
   const disconnect = useCallback(() => {
     eventSourceRef.current?.close();
     eventSourceRef.current = undefined;
     sessionRef.current = undefined;
+    approvalRef.current?.abort();
     setSession(undefined);
     setWallet(undefined);
     setBalances([]);
     setSseReady(false);
     setNeedsWalletSetup(false);
-    autoResumeAttempted.current = false;
-    autoCreateAttempted.current = false;
   }, []);
 
   // Once a Supabase session exists, silently try to resume the Circle wallet
@@ -312,19 +347,22 @@ export function UcwSessionProvider({ children }: { children: ReactNode }) {
       }
       if (authStatus !== "signed-in" || !user || session || autoResumeAttempted.current) return;
       autoResumeAttempted.current = true;
+      const userId = user.id;
 
       setIsBusy(true);
       try {
         const { hasWallet } = await getJsonWithAuthRetry<{ hasWallet: boolean }>(
           "/api/wallet-accounts/me",
         );
+        // Signed out (or in as someone else) while this was in flight: not our answer.
+        if (userIdRef.current !== userId) return;
         if (hasWallet) {
           await continueWithPin();
         } else {
           setNeedsWalletSetup(true);
         }
       } catch (err) {
-        setError(humanize(err).title);
+        if (userIdRef.current === userId) setError(humanize(err).title);
       } finally {
         setIsBusy(false);
       }
@@ -356,6 +394,7 @@ export function UcwSessionProvider({ children }: { children: ReactNode }) {
         resetPin,
         recoverPin,
         refreshWallet,
+        withApproval,
         disconnect,
       }}
     >

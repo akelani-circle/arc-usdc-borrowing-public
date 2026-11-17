@@ -39,7 +39,7 @@ export function CollateralPanel({
   activeLoanId: string | undefined;
   onSuccess: () => void;
 }) {
-  const { session } = useUcwSession();
+  const { session, withApproval } = useUcwSession();
   const [addAmount, setAddAmount] = useState("0.00001");
   const [withdrawAmount, setWithdrawAmount] = useState("0.000001");
 
@@ -98,7 +98,13 @@ export function CollateralPanel({
                 disabled={!hasLoan || !addQuote.isSuccess || addExec.isLoading || !addAmount}
                 onClick={async () => {
                   const result = await addExec.run(() =>
-                    postJson("/api/borrow/add-collateral", { sessionId: session?.sessionId, loanId: activeLoanId, amount: addAmount }),
+                    withApproval((signal) =>
+                      postJson(
+                        "/api/borrow/add-collateral",
+                        { sessionId: session?.sessionId, loanId: activeLoanId, amount: addAmount },
+                        signal,
+                      ),
+                    ),
                   );
                   if (result) {
                     addQuote.reset();
@@ -146,11 +152,13 @@ export function CollateralPanel({
                 disabled={!hasLoan || !withdrawQuote.isSuccess || withdrawExec.isLoading || !withdrawAmount}
                 onClick={async () => {
                   const result = await withdrawExec.run(() =>
-                    postJson("/api/borrow/withdraw-collateral", {
-                      sessionId: session?.sessionId,
-                      loanId: activeLoanId,
-                      amount: withdrawAmount,
-                    }),
+                    withApproval((signal) =>
+                      postJson(
+                        "/api/borrow/withdraw-collateral",
+                        { sessionId: session?.sessionId, loanId: activeLoanId, amount: withdrawAmount },
+                        signal,
+                      ),
+                    ),
                   );
                   if (result) {
                     withdrawQuote.reset();

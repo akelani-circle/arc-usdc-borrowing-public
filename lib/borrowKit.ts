@@ -37,11 +37,15 @@ export const ucwClient =
   initiateUserControlledWalletsClient({ apiKey: process.env.CIRCLE_API_KEY! });
 globalForKit.ucwClient = ucwClient;
 
-// Borrow Kit authenticates with the Circle API key. Use the prod endpoint: staging
-// returned 404 and rejected keys.
-const providerConfig: { apiKey?: string; baseUrl?: string } = {};
-if (process.env.CIRCLE_API_KEY) providerConfig.apiKey = process.env.CIRCLE_API_KEY;
+// Borrow Kit 1.0.0 takes the Circle API key only on `borrow` and `getBorrowQuote`, where it
+// picks the integrator fee. Every other Borrow Service call (loans, market, quotes, repay,
+// close, collateral) refuses a configured key with a validation error. So the provider is
+// keyless and those two calls pass `borrowConfig`. Use the prod endpoint: staging returned 404.
+const providerConfig: { baseUrl?: string } = {};
 if (process.env.BORROW_BASE_URL) providerConfig.baseUrl = process.env.BORROW_BASE_URL;
+
+/** Per-call config for `borrow` and `getBorrowQuote`, the only calls that accept the API key. */
+export const borrowConfig = process.env.CIRCLE_API_KEY ? { apiKey: process.env.CIRCLE_API_KEY } : undefined;
 
 export const borrowKit =
   globalForKit.borrowKit ??
