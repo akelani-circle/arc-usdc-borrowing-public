@@ -53,7 +53,7 @@ A single dashboard (`/`) provides:
 ## Prerequisites
 
 - **Node.js 22.22.2+ or 24.15+** (or 26+) — Install via [nvm](https://github.com/nvm-sh/nvm). The app
-  itself runs on Node 22+, but the test tooling (`jsdom` 30) needs these versions, and `npm ci`
+  itself runs on Node 22+, but the test tooling (`jsdom` 31) needs these versions, and `npm ci`
   warns on older ones.
 - **Docker**, for the local Supabase stack (auth and the `wallet_accounts` / `activity_log` tables)
 - Circle User-Controlled Wallets **[API key](https://console.circle.com/signin)**
